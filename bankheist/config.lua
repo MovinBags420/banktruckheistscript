@@ -32,23 +32,29 @@ Config.BankTruckModel = "stockade"
 Config.GuardModel = "s_m_y_swat_01"
 Config.GuardWeapon = "WEAPON_CARBINERIFLE"
 Config.NumGuards = 2
+
 Config.TruckBlipTime = 60
 Config.TruckLifeTime = 300
-Config.InfoCost = 2000
-Config.TruckDoorHealth = 400
 
+Config.InfoCost = 2000
+Config.TruckDoorHealth = 100
 Config.HeistCooldown = 1200
 Config.HeistMaxTime = 1200
 
-Config.ShellModel = "k4mb1_heist_van" -- Replace with your shell model if different
-Config.ShellSpawn = vector3(1090.63, -3191.52, -116.16)
-Config.ShellHeading = 359.06
-Config.ShellExit = vector3(1090.63, -3191.52, -115.96)
+Config.ShellModel = "k4mb1_heist_van"
 
-Config.LootTable = {
-    { type = "money", min = 5000, max = 15000 },
-    { type = "item", item = "goldbar", min = 1, max = 3 },
-    { type = "item", item = "rolex", min = 2, max = 6 }
+-- === LOOTBOX REWARDS: Easily configure loot per box below! ===
+Config.LootBoxes = {
+    -- Left side
+    { coords = vector3(1091.99, -3197.90, 53.66), name = "lootbox_left_1", rewards = { {item = "markedbills", amount = {1,3}} } },
+    { coords = vector3(1091.99, -3197.40, 53.66), name = "lootbox_left_2", rewards = { {item = "band", amount = {1,2}} } },
+    { coords = vector3(1091.99, -3196.90, 53.66), name = "lootbox_left_3", rewards = { {item = "goldbar", amount = {1,1}}, {item = "diamond", amount = {2,4}} } },
+    { coords = vector3(1091.99, -3196.40, 53.66), name = "lootbox_left_4", rewards = { {item = "band", amount = {1,1}} } },
+    -- Right side
+    { coords = vector3(1090.6, -3197.90, 53.66), name = "rightside_loot_1", rewards = { {item = "goldbar", amount = {1,1}}, {item = "diamond", amount = {2,4}} } },
+    { coords = vector3(1090.6, -3197.40, 53.66), name = "rightside_loot_2", rewards = { {item = "markedbills", amount = {1,3}} } },
+    { coords = vector3(1090.6, -3196.90, 53.66), name = "rightloot_3", rewards = { {item = "rolex", amount = {2,6}} } },
+    { coords = vector3(1090.6, -3196.40, 53.66), name = "rightside_loot_4", rewards = { {item = "band", amount = {1,1}} } }
 }
 
 Config.PatrolRoutes = {

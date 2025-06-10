@@ -1,33 +1,11 @@
 local QBCore = exports['qb-core']:GetCoreObject()
-
---------------------------
--- CONFIGURATION
---------------------------
-local PhoneBoothModels = {
-    "prop_phonebox_01",
-    "prop_phonebox_02",
-    "prop_phonebox_03",
-    "prop_phonebox_04"
-}
-
--- Shell configuration
-local Config = {}
-Config.ShellModel = "k4mb1_heist_van" -- DO NOT CHANGE UNLESS REQUESTED
-Config.ShellSpawn = vector3(1088.7, -3196.6, -114.0)
-Config.ShellExit = vector3(1088.7, -3196.6, -113.8)
-Config.ShellHeading = 270.0
-
---------------------------
--- STATE FOR EXIT POSITION
---------------------------
-local playerPrevPos = nil
-local playerPrevHeading = nil
+local Config = Config
 
 --------------------------
 -- PHONEBOOTH THIRD EYE
 --------------------------
 Citizen.CreateThread(function()
-    for _, model in ipairs(PhoneBoothModels) do
+    for _, model in ipairs(Config.PhoneBoothModels) do
         exports['qb-target']:AddTargetModel(model, {
             options = {
                 {
@@ -47,22 +25,31 @@ RegisterNetEvent("qb-banktruck:client:phoneBoothInteract", function()
 end)
 
 --------------------------
--- HEIST STATE
+-- HEIST STATE & UTILITY
 --------------------------
 local meetNPC
 local truck
 local truckBlip
 local guards = {}
 local truckCoords, truckHeading
-local doorsBlown, insideShell = false, false
+local doorsBlown = false
+local insideShell = false
 local shellObject
-local patrolRoute = {
-    vector3(1130.0, -3180.0, -40.1),
-    vector3(1145.0, -3200.0, -40.1),
-    vector3(1120.0, -3210.0, -40.1),
-    vector3(1100.0, -3185.0, -40.1)
-}
-local truckDoorHealth = 60
+local truckDoorHealth = Config.TruckDoorHealth
+local playerPrevPos, playerPrevHeading
+
+function DrawText3D(x, y, z, text)
+    SetTextScale(0.35, 0.35)
+    SetTextFont(4)
+    SetTextProportional(1)
+    SetTextColour(255, 255, 255, 215)
+    SetTextEntry("STRING")
+    SetTextCentre(true)
+    AddTextComponentString(text)
+    SetDrawOrigin(x, y, z, 0)
+    DrawText(0.0, 0.0)
+    ClearDrawOrigin()
+end
 
 --------------------------
 -- MEET NPC FLOW
@@ -94,7 +81,7 @@ RegisterNetEvent("qb-banktruck:client:spawnMeetNPC", function(coords, heading, m
             {
                 event = "qb-banktruck:client:buyInfo",
                 icon = "fas fa-money-bill",
-                label = "Buy Truck Location ($2000)"
+                label = "Buy Truck Location ($" .. Config.InfoCost .. ")"
             }
         },
         distance = 2.0
@@ -112,8 +99,7 @@ end)
 --------------------------
 -- TRUCK SPAWN & PATROL
 --------------------------
-RegisterNetEvent("qb-banktruck:client:spawnTruck", function(loc, truckModel, guardModel, guardWeapon, numGuards, route)
-    -- Blip
+RegisterNetEvent("qb-banktruck:client:spawnTruck", function(loc, truckModel, guardModel, guardWeapon, numGuards, patrolRoute)
     if truckBlip then RemoveBlip(truckBlip) end
     truckBlip = AddBlipForCoord(loc.x, loc.y, loc.z)
     SetBlipSprite(truckBlip, 477)
@@ -124,7 +110,6 @@ RegisterNetEvent("qb-banktruck:client:spawnTruck", function(loc, truckModel, gua
     EndTextCommandSetBlipName(truckBlip)
     QBCore.Functions.Notify("A bank truck has been spotted! Check your map!", "primary", 8000)
 
-    -- Truck
     RequestModel(truckModel)
     while not HasModelLoaded(truckModel) do Wait(10) end
     truck = CreateVehicle(truckModel, loc.x, loc.y, loc.z, loc.w, true, true)
@@ -134,7 +119,6 @@ RegisterNetEvent("qb-banktruck:client:spawnTruck", function(loc, truckModel, gua
     truckCoords = vector3(loc.x, loc.y, loc.z)
     truckHeading = loc.w
 
-    -- Guards
     RequestModel(guardModel)
     while not HasModelLoaded(guardModel) do Wait(10) end
     guards = {}
@@ -151,14 +135,14 @@ RegisterNetEvent("qb-banktruck:client:spawnTruck", function(loc, truckModel, gua
     Citizen.CreateThread(function()
         local idx = 1
         while truck and DoesEntityExist(truck) and not doorsBlown do
-            local dest = route[idx]
+            local dest = patrolRoute[idx]
             TaskVehicleDriveToCoord(guards[1], truck, dest.x, dest.y, dest.z, 25.0, 0, GetEntityModel(truck), 786603, 1.0, true)
             repeat
                 Wait(1000)
                 if #(GetEntityCoords(truck) - dest) < 10.0 then break end
             until doorsBlown
             idx = idx + 1
-            if idx > #route then idx = 1 end
+            if idx > #patrolRoute then idx = 1 end
         end
     end)
     Citizen.CreateThread(TruckInteractionThread)
@@ -210,23 +194,24 @@ function GuardExitAttackThread()
 end
 
 --------------------------
--- SHELL LOGIC
+-- SHELL LOGIC (SPAWN SHELL OBJECT)
 --------------------------
 RegisterNetEvent("qb-banktruck:client:enterShell", function()
-    -- Save previous position for safe exit
     playerPrevPos = GetEntityCoords(PlayerPedId())
     playerPrevHeading = GetEntityHeading(PlayerPedId())
     insideShell = true
     DoScreenFadeOut(500)
     Wait(700)
-    RequestModel(Config.ShellModel)
-    while not HasModelLoaded(Config.ShellModel) do Wait(10) end
-    shellObject = CreateObject(GetHashKey(Config.ShellModel), Config.ShellSpawn, false, false, false)
-    SetEntityHeading(shellObject, Config.ShellHeading)
+    local model = Config.ShellModel or "k4mb1_heist_van"
+    RequestModel(model)
+    while not HasModelLoaded(model) do Wait(10) end
+    local shellSpawn = vector3(1091.19, -3195.17, 51.86)
+    shellObject = CreateObject(GetHashKey(model), shellSpawn, false, false, false)
+    SetEntityHeading(shellObject, 0.0)
     SetEntityAsMissionEntity(shellObject, true, true)
     FreezeEntityPosition(shellObject, true)
-    SetEntityCoords(PlayerPedId(), Config.ShellExit)
-    SetEntityHeading(PlayerPedId(), Config.ShellHeading)
+    SetEntityCoords(PlayerPedId(), 1091.19, -3195.17, 52.26)
+    SetEntityHeading(PlayerPedId(), 0.0)
     Wait(400)
     DoScreenFadeIn(500)
     QBCore.Functions.Notify("You are inside the vault! Use your third eye to interact with lootboxes.", "primary", 5000)
@@ -238,8 +223,8 @@ function ShellMenuThread()
     while insideShell do
         Wait(0)
         local ply = PlayerPedId()
-        if #(GetEntityCoords(ply) - Config.ShellExit) < 2.0 then
-            DrawText3D(Config.ShellExit.x, Config.ShellExit.y, Config.ShellExit.z+1.0, "[E] Exit")
+        if #(GetEntityCoords(ply) - vector3(1091.19, -3195.17, 52.26)) < 2.5 then
+            DrawText3D(1091.19, -3195.17, 52.6, "[E] Exit")
             if IsControlJustReleased(0, 38) then
                 DoScreenFadeOut(500)
                 Wait(700)
@@ -247,7 +232,7 @@ function ShellMenuThread()
                     SetEntityCoords(ply, playerPrevPos.x, playerPrevPos.y, playerPrevPos.z)
                     SetEntityHeading(ply, playerPrevHeading or 0.0)
                 else
-                    SetEntityCoords(ply, 1088.7, -3196.6, 30.0) -- fallback to street
+                    SetEntityCoords(ply, 1088.7, -3196.6, 30.0)
                 end
                 if shellObject and DoesEntityExist(shellObject) then DeleteEntity(shellObject) end
                 shellObject = nil
@@ -263,180 +248,85 @@ function ShellMenuThread()
 end
 
 --------------------------
--- LOOT BOXES (qb-target BoxZone + drill/loot logic, only third eye)
+-- LOOTBOXES WITH CONFIGURABLE REWARD LOGIC
 --------------------------
 local drilledBoxes = {}
 local banktruckDrillZones = {}
 
-local DrillLootSpots = {
-    -- Top row
-    {
-        coords = vector3(1086.54, -3196.01, -112.34),
-        name = "banktruck_lootbox_1",
-        loot = { item = "goldbar", min = 1, max = 2 }
-    },
-    {
-        coords = vector3(1087.33, -3195.99, -112.34),
-        name = "banktruck_lootbox_2",
-        loot = { item = "rolex", min = 2, max = 4 }
-    },
-    {
-        coords = vector3(1087.48, -3197.48, -112.34),
-        name = "banktruck_lootbox_3",
-        loot = { item = "diamond", min = 1, max = 2 }
-    },
-    {
-        coords = vector3(1086.7, -3197.45, -112.34),
-        name = "banktruck_lootbox_4",
-        loot = { item = "markedbills", min = 3, max = 7 }
-    },
-    -- Bottom row (.17 lower in Z)
-    {
-        coords = vector3(1086.54, -3196.01, -112.51),
-        name = "banktruck_lootbox_5",
-        loot = { item = "goldbar", min = 1, max = 2 }
-    },
-    {
-        coords = vector3(1087.33, -3195.99, -112.51),
-        name = "banktruck_lootbox_6",
-        loot = { item = "rolex", min = 2, max = 4 }
-    },
-    {
-        coords = vector3(1087.48, -3197.48, -112.51),
-        name = "banktruck_lootbox_7",
-        loot = { item = "diamond", min = 1, max = 2 }
-    },
-    {
-        coords = vector3(1086.7, -3197.45, -112.51),
-        name = "banktruck_lootbox_8",
-        loot = { item = "markedbills", min = 3, max = 7 }
-    },
-}
-
 function setupBankTruckDrillLootZones()
-    for _, box in ipairs(DrillLootSpots) do
+    CleanupBankTruckDrillLootZones()
+    for _, box in ipairs(Config.LootBoxes) do
         drilledBoxes[box.name] = drilledBoxes[box.name] or false
         if not banktruckDrillZones[box.name] then
-            banktruckDrillZones[box.name] = exports['qb-target']:AddBoxZone(box.name, box.coords, 0.2, 0.2, {
+            banktruckDrillZones[box.name] = exports['qb-target']:AddBoxZone(box.name, box.coords, 0.35, 0.35, {
                 name = box.name,
                 heading = 0,
                 debugPoly = false,
-                minZ = box.coords.z - 0.5,
-                maxZ = box.coords.z + 0.5,
+                minZ = box.coords.z - 0.25,
+                maxZ = box.coords.z + 0.25,
             }, {
                 options = {
                     {
-                        label = "Drill Safety Box",
-                        icon = "fas fa-drill",
+                        label = "Lockpick Lootbox",
+                        icon = "fas fa-lock",
                         action = function()
-                            local ply = PlayerPedId()
-                            if not drilledBoxes[box.name] then
-                                -- Spawn drill prop and attach to hand (flipped 180 degrees)
-                                local drillModel = "hei_prop_heist_drill"
-                                RequestModel(drillModel)
-                                while not HasModelLoaded(drillModel) do Wait(10) end
-                                local drillObj = CreateObject(GetHashKey(drillModel), GetEntityCoords(ply), true, true, true)
-                                -- Attach to right hand and flip 180 degrees (Z + 180)
-                                AttachEntityToEntity(drillObj, ply, GetPedBoneIndex(ply, 57005), 0.13, 0.03, -0.02, 90.0, 90.0, 0.0, true, true, false, true, 1, true)
-
-                                -- Play drill sound (use xSound or native PlaySoundFromEntity)
-                                TriggerEvent("qb-banktruck:client:playDrillSound", drillObj)
-
-                                QBCore.Functions.Progressbar("drill_loot_box", "Drilling open the box...", 7500, false, true, {
-                                    disableMovement = true,
-                                    disableCarMovement = true,
-                                    disableMouse = false,
-                                    disableCombat = true,
-                                }, {
-                                    animDict = "anim@heists@fleeca_bank@drilling",
-                                    anim = "drill_straight_idle",
-                                    flags = 49,
-                                }, {}, {}, function()
-                                    drilledBoxes[box.name] = true
-                                    local amt = math.random(box.loot.min, box.loot.max)
-                                    TriggerServerEvent("banktruck:loot:giveItem", box.loot.item, amt)
-                                    QBCore.Functions.Notify("You found "..amt.."x "..box.loot.item.."!", "success", 3000)
-                                    ClearPedTasks(ply)
-                                    -- Remove drill prop
-                                    DeleteEntity(drillObj)
-                                    -- Stop drill sound
-                                    TriggerEvent("qb-banktruck:client:stopDrillSound")
-                                end, function()
-                                    QBCore.Functions.Notify("You stopped drilling.", "error", 2000)
-                                    ClearPedTasks(ply)
-                                    -- Remove drill prop
-                                    DeleteEntity(drillObj)
-                                    -- Stop drill sound
-                                    TriggerEvent("qb-banktruck:client:stopDrillSound")
-                                end)
-                            else
-                                QBCore.Functions.Notify("This box is already looted.", "error", 2000)
+                            if drilledBoxes[box.name] then
+                                QBCore.Functions.Notify("Already looted.", "error")
+                                return
                             end
+                            local ped = PlayerPedId()
+                            -- Only play animation once before progressbar/minigame
+                            RequestAnimDict("amb@prop_human_bum_bin@base")
+                            while not HasAnimDictLoaded("amb@prop_human_bum_bin@base") do Wait(10) end
+                            TaskPlayAnim(ped, "amb@prop_human_bum_bin@base", "base", 8.0, -8.0, 5000, 1, 0, false, false, false)
+                            QBCore.Functions.Progressbar("lockpicking_lootbox", "Lockpicking...", 5000, false, true, {
+                                disableMovement = true,
+                                disableCarMovement = true,
+                                disableMouse = false,
+                                disableCombat = true,
+                            }, {}, {}, {}, function()
+                                ClearPedTasks(ped)
+                                TriggerEvent("qb-lock:client:openLockpick", function(success)
+                                    if success then
+                                        drilledBoxes[box.name] = true
+                                        QBCore.Functions.Notify("Success! Looting...", "success")
+                                        -- Debug print for loot event
+                                        print("[Banktruck:loot:giveItems] Triggering for box:", box.name)
+                                        -- Only send box name, NOT reward table!
+                                        TriggerServerEvent("banktruck:loot:giveItems", box.name)
+                                    else
+                                        QBCore.Functions.Notify("You failed the lockpick.", "error")
+                                    end
+                                end, true)
+                            end, function()
+                                ClearPedTasks(ped)
+                                QBCore.Functions.Notify("You stopped lockpicking.", "error")
+                            end)
                         end,
                         canInteract = function()
-                            return insideShell and not drilledBoxes[box.name]
+                            return not drilledBoxes[box.name]
                         end,
                         distance = 1.5
                     }
                 },
-                distance = 1.5,
+                distance = 2.0,
             })
         end
     end
 end
 
--- Drill sound logic using xSound (recommended) or natives
-local drillSoundId = nil
-
-RegisterNetEvent("qb-banktruck:client:playDrillSound", function(entity)
-    -- Use xSound if available
-    if exports['xsound'] then
-        local pos = GetEntityCoords(entity)
-        exports['xsound']:PlayUrlPos("banktruck_drill", "sounds/drill.ogg", 0.4, pos)
-        exports['xsound']:Distance("banktruck_drill", 2.0)
-    else
-        -- Fallback: Use PlaySoundFromEntity (must add drill.ogg as audio in GTA or use a default sound)
-        drillSoundId = GetSoundId()
-        PlaySoundFromEntity(drillSoundId, "DRILL", entity, 0, 0, 0)
-    end
-end)
-
-RegisterNetEvent("qb-banktruck:client:stopDrillSound", function()
-    if exports['xsound'] then
-        if exports['xsound'].destroy then
-            exports['xsound']:destroy("banktruck_drill")
-        elseif exports['xsound'].Destroy then
-            exports['xsound']:Destroy("banktruck_drill")
-        end
-    end
-end)
-
 function CleanupBankTruckDrillLootZones()
-    for _, box in ipairs(DrillLootSpots) do
-        exports['qb-target']:RemoveZone(box.name)
+    for _, box in ipairs(Config.LootBoxes) do
+        if banktruckDrillZones[box.name] then
+            exports['qb-target']:RemoveZone(box.name)
+            banktruckDrillZones[box.name] = nil
+        end
         drilledBoxes[box.name] = nil
-        banktruckDrillZones[box.name] = nil
     end
 end
 
 --------------------------
--- UTILITY
---------------------------
-function DrawText3D(x, y, z, text)
-    SetTextScale(0.35, 0.35)
-    SetTextFont(4)
-    SetTextProportional(1)
-    SetTextColour(255, 255, 255, 215)
-    SetTextEntry("STRING")
-    SetTextCentre(true)
-    AddTextComponentString(text)
-    SetDrawOrigin(x, y, z, 0)
-    DrawText(0.0, 0.0)
-    ClearDrawOrigin()
-end
-
---------------------------
--- CLEANUP ON RESOURCE STOP
+-- RESOURCE CLEANUP
 --------------------------
 AddEventHandler('onResourceStop', function(resource)
     if resource == GetCurrentResourceName() then
@@ -446,6 +336,5 @@ AddEventHandler('onResourceStop', function(resource)
         if shellObject and DoesEntityExist(shellObject) then DeleteEntity(shellObject) end
         CleanupBankTruckDrillLootZones()
         if truckBlip then RemoveBlip(truckBlip) end
-        TriggerEvent("qb-banktruck:client:stopDrillSound")
     end
 end)
